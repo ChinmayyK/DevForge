@@ -98,3 +98,4 @@ func TestHasActions(t *testing.T) {
 		t.Error("HasActions() should be false after Execute()")
 	}
 }
+
