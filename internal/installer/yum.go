@@ -90,3 +90,4 @@ func (y *YumInstaller) Upgrade(name, version string) error {
 	}
 	return nil
 }
+
