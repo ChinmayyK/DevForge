@@ -108,3 +108,4 @@ func TestExecutor_SanitizationGuard(t *testing.T) {
 		t.Error("expected sanitization error, got nil")
 	}
 }
+
