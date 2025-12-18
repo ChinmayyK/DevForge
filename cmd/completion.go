@@ -51,3 +51,4 @@ To load completions:
 func init() {
 	rootCmd.AddCommand(completionCmd)
 }
+
