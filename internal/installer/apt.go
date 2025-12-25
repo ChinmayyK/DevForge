@@ -90,3 +90,4 @@ func (a *AptInstaller) Upgrade(name, version string) error {
 	}
 	return nil
 }
+
