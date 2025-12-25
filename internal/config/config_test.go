@@ -165,3 +165,4 @@ func TestConfig_ToYAML_NoPostInit(t *testing.T) {
 		t.Errorf("expected postInit comment in YAML output")
 	}
 }
+
