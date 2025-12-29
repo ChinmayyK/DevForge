@@ -101,3 +101,4 @@ func (c *ChocoInstaller) Upgrade(name, version string) error {
 	}
 	return nil
 }
+
