@@ -85,3 +85,4 @@ func runUpdate(_ *cobra.Command, _ []string) error {
 	dlSpin.Stop(fmt.Sprintf("Updated to v%s — restart DevForge to use the new version", result.LatestVersion))
 	return nil
 }
+
