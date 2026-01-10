@@ -28,3 +28,4 @@ func runVersion(_ *cobra.Command, _ []string) {
 	fmt.Println("  Run 'devforge update' to check for a newer release.")
 	fmt.Println()
 }
+
