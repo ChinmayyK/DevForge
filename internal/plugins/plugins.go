@@ -168,3 +168,4 @@ func (m *Manager) Run(name string, input PluginInput) (*PluginOutput, error) {
 	m.log.Info(fmt.Sprintf("plugin %q completed: %s", name, output.Message))
 	return &output, nil
 }
+
