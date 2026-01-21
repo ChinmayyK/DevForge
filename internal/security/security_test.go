@@ -144,3 +144,4 @@ func TestValidatePath(t *testing.T) {
 		})
 	}
 }
+
