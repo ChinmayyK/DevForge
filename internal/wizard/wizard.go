@@ -249,3 +249,4 @@ func promptManualURL() (string, error) {
 	}
 	return strings.TrimSpace(repoURL), nil
 }
+
