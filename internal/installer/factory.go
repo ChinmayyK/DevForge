@@ -36,4 +36,3 @@ func NewFromOS(log *logger.Logger, exec *executor.Executor, osInfo osdetect.OSIn
 		return nil, fmt.Errorf("no installer available for package manager %q (OS: %s)", osInfo.PackageMgr, osInfo.Name)
 	}
 }
-
