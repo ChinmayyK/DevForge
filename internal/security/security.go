@@ -99,4 +99,3 @@ func ValidatePath(basePath, targetPath string) error {
 func SanitizeInput(input string) string {
 	return strings.TrimSpace(strings.ReplaceAll(input, "\x00", ""))
 }
-
