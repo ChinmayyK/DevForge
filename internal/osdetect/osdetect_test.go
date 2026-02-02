@@ -107,3 +107,4 @@ func TestDetectLinux_DefaultsToApt(t *testing.T) {
 		t.Error("expected non-empty Family from detectLinux")
 	}
 }
+
