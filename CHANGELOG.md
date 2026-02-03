@@ -43,3 +43,4 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic V
 - Shell-injection sanitization on all executor arguments
 - `--dry-run`, `--verbose`, `--json-logs`, `--force`, `--config` global flags
 - Cross-platform CI/CD via GitHub Actions (macOS amd64/arm64, Linux amd64/arm64, Windows amd64)
+
