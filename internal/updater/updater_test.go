@@ -105,4 +105,3 @@ func TestVerifyChecksum_Mismatch(t *testing.T) {
 		t.Errorf("empty checksumURL should skip verification, got: %v", err)
 	}
 }
-
