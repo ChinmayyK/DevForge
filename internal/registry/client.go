@@ -114,3 +114,4 @@ func tagsContain(tags []string, kwLower string) bool {
 func (c *Client) ClearCache() error {
 	return c.cache.Clear()
 }
+
