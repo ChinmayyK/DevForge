@@ -42,4 +42,3 @@ func (r Registry) ValidTemplates() []Template {
 	}
 	return valid
 }
-
