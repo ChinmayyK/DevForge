@@ -38,4 +38,3 @@ const (
 	CodeInvalidConfig     = "ERR_INVALID_CONFIG"
 	CodePathExists        = "ERR_PATH_EXISTS"
 )
-
