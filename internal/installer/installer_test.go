@@ -24,3 +24,4 @@ func TestIsLatest(t *testing.T) {
 		})
 	}
 }
+
