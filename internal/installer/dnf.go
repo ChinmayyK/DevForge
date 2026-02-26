@@ -91,4 +91,3 @@ func (d *DnfInstaller) Upgrade(name, version string) error {
 	}
 	return nil
 }
-
