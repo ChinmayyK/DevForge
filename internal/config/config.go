@@ -3,6 +3,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -54,6 +55,27 @@ func Load(configPath string) (*Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	if err := validate(&cfg); err != nil {
+		return nil, fmt.Errorf("config validation failed: %w", err)
+	}
+
+	return &cfg, nil
+}
+
+// LoadFromBytes reads the configuration directly from an in-memory byte slice.
+func LoadFromBytes(data []byte) (*Config, error) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+
+	if err := v.ReadConfig(bytes.NewReader(data)); err != nil {
+		return nil, fmt.Errorf("failed to read config from bytes: %w", err)
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config bytes: %w", err)
 	}
 
 	if err := validate(&cfg); err != nil {

@@ -3,8 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -16,12 +19,15 @@ import (
 	"github.com/chinmay/devforge/internal/installer"
 	"github.com/chinmay/devforge/internal/logger"
 	"github.com/chinmay/devforge/internal/osdetect"
+	"github.com/chinmay/devforge/internal/registry"
 	"github.com/chinmay/devforge/internal/rollback"
 	"github.com/chinmay/devforge/internal/security"
 	"github.com/chinmay/devforge/internal/semver"
 	"github.com/chinmay/devforge/internal/template"
 	"github.com/chinmay/devforge/internal/ux"
 )
+
+var templateName string
 
 var initCmd = &cobra.Command{
 	Use:   "init <project-name>",
@@ -39,6 +45,7 @@ If any step fails, previously completed steps are automatically rolled back.`,
 }
 
 func init() {
+	initCmd.Flags().StringVarP(&templateName, "template", "t", "", "name of the starter template from the remote registry")
 	rootCmd.AddCommand(initCmd)
 }
 func runInit(cmd *cobra.Command, args []string) error {
@@ -77,10 +84,66 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("✓ OS detected: %s (%s/%s) — package manager: %s\n", osInfo.Name, osInfo.RawOS, osInfo.Arch, osInfo.PackageMgr)
 
 	// ── Step 2: Load config ────────────────────────────────────────
-	cfg, err := config.Load(cfgFile)
-	if err != nil {
-		return fmt.Errorf("configuration error: %w", err)
+	var cfg *config.Config
+	var loadErr error
+
+	if templateName != "" {
+		fmt.Printf("⟳ Fetching template %q from remote registry...\n", templateName)
+		client, _, err := getRegistryClient()
+		if err != nil {
+			return fmt.Errorf("registry client initialization failed: %w", err)
+		}
+		reg, err := client.Fetch(false)
+		if err != nil {
+			return fmt.Errorf("failed to fetch registry: %w", err)
+		}
+
+		var matched registry.Template
+		found := false
+		for _, t := range reg.ValidTemplates() {
+			if strings.EqualFold(t.Name, templateName) {
+				matched = t
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return fmt.Errorf("template %q not found in registry", templateName)
+		}
+
+		// Convert GitHub URL to Raw Content URL for the devforge.yaml file
+		rawURL := strings.Replace(matched.URL, "github.com", "raw.githubusercontent.com", 1)
+		rawURL = strings.TrimSuffix(rawURL, ".git") + "/main/devforge.yaml"
+
+		resp, err := http.Get(rawURL)
+		if err != nil {
+			return fmt.Errorf("failed to fetch remote devforge.yaml: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("template %q does not contain a valid devforge.yaml on main branch (HTTP %d)", templateName, resp.StatusCode)
+		}
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to read remote devforge.yaml: %w", err)
+		}
+
+		cfg, loadErr = config.LoadFromBytes(bodyBytes)
+		if loadErr == nil {
+			// Override the parsed template URL to ensure it matches the actual registry URL
+			cfg.Template = matched.URL
+		}
+	} else {
+		cfg, loadErr = config.Load(cfgFile)
 	}
+
+	if loadErr != nil {
+		return fmt.Errorf("configuration error: %w", loadErr)
+	}
+
 	fmt.Printf("✓ Configuration loaded (%d dependencies, template: %s)\n", len(cfg.Dependencies), cfg.Template)
 
 	// ── Step 3: Initialize logger ──────────────────────────────────
