@@ -1,0 +1,10 @@
+dependencies:
+  - name: node
+  - name: git
+  - name: docker
+
+template: "https://github.com/some-org/node-template"
+
+linting: true
+gitHooks: true
+envFile: true
