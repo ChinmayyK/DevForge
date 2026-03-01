@@ -34,10 +34,7 @@ type Config struct {
 	EnvFile bool `mapstructure:"envFile"`
 }
 
-// Load reads the configuration from the given file path. If configPath
-// is empty, it falls back to looking for config/default.yaml relative
-// to the working directory. It validates that all required fields are
-// present and returns a typed Config.
+// Load reads the configuration from the given file path.
 func Load(configPath string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigType("yaml")
@@ -66,8 +63,7 @@ func Load(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
-// validate ensures all required configuration fields are present and
-// contain valid values.
+// validate ensures all required configuration fields are present.
 func validate(cfg *Config) error {
 	var errs []string
 

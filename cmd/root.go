@@ -2,9 +2,9 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
+	"github.com/chinmay/devforge/internal/ux"
 	"github.com/spf13/cobra"
 )
 
@@ -13,36 +13,33 @@ var Version = "dev"
 
 // Flag variables shared across commands.
 var (
-	cfgFile    string
-	dryRun     bool
-	verbose    bool
-	jsonLogs   bool
-	remoteHost string
+	cfgFile  string
+	dryRun   bool
+	verbose  bool
+	jsonLogs bool
+	force    bool
 )
 
 // rootCmd is the base command for the DevForge CLI.
 var rootCmd = &cobra.Command{
-	Use:   "devforge",
-	Short: "DevForge — production-grade project scaffolding tool",
-	Long: `DevForge is a cross-platform CLI tool that automates project setup:
+	Use:   "devforge <command>",
+	Short: "DevForge — Development Environment Automation CLI",
+	Long: `DevForge — Development Environment Automation CLI
 
-  • Detects your operating system and architecture
-  • Installs missing dependencies via your platform's package manager
-  • Clones starter template repositories
-  • Generates .env configuration files
-  • Provides system health checks via the doctor command
-  • Manages templates from a remote registry
-  • Supports plugins for extensibility
-  • Auto-updates from GitHub releases
+A powerful, standalone CLI tool that hardens and automates project scaffolding:
+  ✔ Detects OS and architecture automatically
+  ✔ Installs required toolchains safely
+  ✔ Uses smart dependency resolution and version pinning
+  ✔ Clones organization templates securely
+  ✔ Provides professional configuration management
 
-Built for developers who value automation and consistency.`,
-	Version: Version,
+Built for elite developers who value speed, safety, and consistency.`,
 }
 
 // Execute runs the root command. This is the entry point called from main.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		ux.Error(err)
 		os.Exit(1)
 	}
 }
@@ -54,9 +51,24 @@ func SetVersion(v string) {
 }
 
 func init() {
+	// Custom premium help template.
+	rootCmd.SetHelpTemplate(`{{.Long}}
+
+Usage:
+  {{.UseLine}}
+
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.
+`)
+
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "path to config file (default: config/default.yaml)")
-	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "simulate all operations without making changes")
-	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable debug-level logging output")
-	rootCmd.PersistentFlags().BoolVar(&jsonLogs, "json-logs", false, "output logs in structured JSON format")
-	rootCmd.PersistentFlags().StringVar(&remoteHost, "remote", "", "remote DevForge agent URL (e.g. https://host:8443)")
+	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "simulate operations without making changes")
+	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "enable debug logging")
+	rootCmd.PersistentFlags().BoolVar(&jsonLogs, "json-logs", false, "structured JSON output")
+	rootCmd.PersistentFlags().BoolVar(&force, "force", false, "force overwrite of existing directories/files")
 }
