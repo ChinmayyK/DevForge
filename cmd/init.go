@@ -25,9 +25,11 @@ import (
 	"github.com/chinmay/devforge/internal/semver"
 	"github.com/chinmay/devforge/internal/template"
 	"github.com/chinmay/devforge/internal/ux"
+	"github.com/chinmay/devforge/internal/wizard"
 )
 
 var templateName string
+var noInteractive bool
 
 var initCmd = &cobra.Command{
 	Use:   "init <project-name>",
@@ -46,6 +48,7 @@ If any step fails, previously completed steps are automatically rolled back.`,
 
 func init() {
 	initCmd.Flags().StringVarP(&templateName, "template", "t", "", "name of the starter template from the remote registry")
+	initCmd.Flags().BoolVar(&noInteractive, "no-interactive", false, "disable interactive wizard (fail if no config found)")
 	rootCmd.AddCommand(initCmd)
 }
 func runInit(cmd *cobra.Command, args []string) error {
@@ -141,7 +144,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if loadErr != nil {
-		return fmt.Errorf("configuration error: %w", loadErr)
+		if noInteractive {
+			return fmt.Errorf("configuration error: %w", loadErr)
+		}
+
+		// Launch interactive wizard when no config is found.
+		var wizardErr error
+		cfg, wizardErr = wizard.Run(defaultRegistryURL, verbose, jsonLogs)
+		if wizardErr != nil {
+			ux.Error(fmt.Errorf("interactive setup failed: %v", wizardErr))
+			return nil
+		}
 	}
 
 	fmt.Printf("✓ Configuration loaded (%d dependencies, template: %s)\n", len(cfg.Dependencies), cfg.Template)

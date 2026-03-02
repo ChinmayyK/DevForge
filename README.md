@@ -81,13 +81,14 @@ devforge init test-app --dry-run --verbose
 
 | Command | Description |
 |---------|-------------|
-| `init <name>` | Scaffold a project, install dependencies (parallel), clone templates |
+| `init <name>` | Scaffold a project — launches interactive wizard if no config found |
 | `doctor` | Check installed dependencies against your config |
 | `templates list`| Browse available starter templates from the remote registry |
 | `templates search`| Search the registry by keyword |
 | `plugin list` | Discover available local plugins |
 | `plugin run` | Execute a plugin with JSON stdin/stdout integration |
 | `update` | Auto-update DevForge to the latest GitHub release |
+| `completion` | Generate shell completions (bash/zsh/fish/powershell) |
 | `version` | Display the binary version, OS context, and Go version |
 
 ---
