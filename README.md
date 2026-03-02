@@ -27,6 +27,14 @@ DevForge is a standalone, heavy-duty CLI tool built for modern developers who va
 
 ## Installation
 
+### Homebrew (Recommended)
+
+```bash
+brew install ChinmayyK/devforge/devforge
+```
+
+This installs the pre-built binary and sets up shell completions automatically.
+
 ### From Source
 
 ```bash
