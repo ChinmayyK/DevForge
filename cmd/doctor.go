@@ -6,6 +6,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/chinmay/devforge/internal/config"
+	"github.com/chinmay/devforge/internal/osdetect"
+	"github.com/chinmay/devforge/internal/ux"
 )
 
 // toolCheck holds the result of checking a single tool.
@@ -31,52 +35,65 @@ func init() {
 }
 
 func runDoctor(_ *cobra.Command, _ []string) error {
-	fmt.Println()
-	fmt.Println("  DevForge Doctor — System Readiness Report")
-	fmt.Println("  ══════════════════════════════════════════")
-	fmt.Printf("  DevForge version: %s\n", Version)
-	fmt.Println()
-
-	checks := []struct {
-		name       string
-		binary     string
-		versionArg string
-	}{
-		{"Homebrew", "brew", "--version"},
-		{"Node.js", "node", "--version"},
-		{"Git", "git", "--version"},
-		{"Docker", "docker", "--version"},
+	// Load configuration to determine required dependencies.
+	cfg, err := config.Load(cfgFile)
+	if err != nil {
+		ux.Error(fmt.Errorf("Failed to run doctor command: %v", err))
+		return nil // Changed from `return` to `return nil` to match `RunE` signature
 	}
 
-	results := make([]toolCheck, 0, len(checks))
-	allOK := true
+	osInfo, err := osdetect.DetectFull()
+	if err != nil {
+		ux.Error(fmt.Errorf("OS detection failed: %v", err))
+		return nil
+	}
+	fmt.Println()
+	ux.Printf("%sDevForge Doctor — System Check%s\n", ux.Blue, ux.Reset)
+	fmt.Println("--------------------------------------------------")
+	ux.Printf("OS: %s/%s\n", osInfo.Name, osInfo.Arch)
+	if osInfo.PackageMgr != "" {
+		ux.Printf("Package Manager: %s\n", osInfo.PackageMgr)
+	}
+	fmt.Println()
 
-	for _, c := range checks {
-		tc := checkTool(c.name, c.binary, c.versionArg)
-		results = append(results, tc)
-		if !tc.Installed {
-			allOK = false
+	allReady := true
+
+	for _, dep := range cfg.Dependencies {
+		var installed bool
+		var versionLabel string
+
+		// Map config dependency names to their binary and version flags
+		binary := dep.Name
+		versionArg := "--version"
+
+		// Handle known special cases
+		if dep.Name == "node" {
+			// node is just node
+		} else if strings.ToLower(dep.Name) == "homebrew" {
+			binary = "brew"
+		}
+
+		tc := checkTool(dep.Name, binary, versionArg)
+		installed = tc.Installed
+		versionLabel = tc.Version
+
+		if installed {
+			ux.Printf("%s%-10s%s : %s installed%s", ux.Gray, dep.Name, ux.Reset, ux.Green+ux.Check, ux.Reset)
+			if versionLabel != "" {
+				ux.Printf(" (%s)", versionLabel)
+			}
+			fmt.Println()
+		} else {
+			ux.Printf("%s%-10s%s : %s missing%s\n", ux.Gray, dep.Name, ux.Reset, ux.Red+ux.Cross, ux.Reset)
+			allReady = false
 		}
 	}
 
-	// Print results as a formatted table.
-	fmt.Printf("  %-12s %-12s %s\n", "Tool", "Status", "Version")
-	fmt.Printf("  %-12s %-12s %s\n", "────", "──────", "───────")
-	for _, r := range results {
-		status := "✓ installed"
-		version := r.Version
-		if !r.Installed {
-			status = "✗ missing"
-			version = r.Error
-		}
-		fmt.Printf("  %-12s %-12s %s\n", r.Name, status, version)
-	}
-
-	fmt.Println()
-	if allOK {
-		fmt.Println("  ✅ All checks passed — system is ready!")
+	fmt.Println("--------------------------------------------------")
+	if allReady {
+		ux.Printf("Status: %sREADY%s\n", ux.Green, ux.Reset)
 	} else {
-		fmt.Println("  ⚠️  Some tools are missing. Install them before running 'devforge init'.")
+		ux.Printf("Status: %sPARTIALLY READY%s\n", ux.Yellow, ux.Reset)
 	}
 	fmt.Println()
 

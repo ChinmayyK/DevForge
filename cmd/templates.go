@@ -36,8 +36,11 @@ var templatesUseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE:  runTemplatesUse,
 }
+var refresh bool
 
 func init() {
+	templatesCmd.PersistentFlags().BoolVar(&refresh, "refresh", false, "force refresh of the template registry cache")
+
 	templatesCmd.AddCommand(templatesListCmd)
 	templatesCmd.AddCommand(templatesSearchCmd)
 	templatesCmd.AddCommand(templatesUseCmd)
@@ -60,7 +63,7 @@ func runTemplatesList(_ *cobra.Command, _ []string) error {
 	}
 	defer log.Close()
 
-	reg, err := client.Fetch()
+	reg, err := client.Fetch(refresh)
 	if err != nil {
 		return fmt.Errorf("failed to fetch template registry: %w", err)
 	}
@@ -98,7 +101,7 @@ func runTemplatesSearch(_ *cobra.Command, args []string) error {
 	}
 	defer log.Close()
 
-	reg, err := client.Fetch()
+	reg, err := client.Fetch(refresh)
 	if err != nil {
 		return fmt.Errorf("failed to fetch template registry: %w", err)
 	}
@@ -126,7 +129,7 @@ func runTemplatesUse(_ *cobra.Command, args []string) error {
 	}
 	defer log.Close()
 
-	reg, err := client.Fetch()
+	reg, err := client.Fetch(refresh)
 	if err != nil {
 		return fmt.Errorf("failed to fetch template registry: %w", err)
 	}

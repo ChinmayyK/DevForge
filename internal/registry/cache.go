@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/chinmay/devforge/internal/logger"
 )
@@ -12,6 +13,11 @@ import (
 // Cache provides local filesystem caching for registry data.
 type Cache struct {
 	log *logger.Logger
+}
+
+type cachedData struct {
+	Registry *Registry `json:"registry"`
+	SavedAt  time.Time `json:"savedAt"`
 }
 
 // NewCache creates a Cache instance.
@@ -49,7 +55,10 @@ func (c *Cache) Save(reg *Registry) error {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
-	data, err := json.MarshalIndent(reg, "", "  ")
+	data, err := json.MarshalIndent(cachedData{
+		Registry: reg,
+		SavedAt:  time.Now(),
+	}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal registry for cache: %w", err)
 	}
@@ -76,11 +85,17 @@ func (c *Cache) Load() (*Registry, error) {
 		return nil, fmt.Errorf("no cached registry available: %w", err)
 	}
 
-	var reg Registry
-	if err := json.Unmarshal(data, &reg); err != nil {
-		return nil, fmt.Errorf("failed to parse cached registry: %w", err)
+	var cached cachedData
+
+	// Try parsing new format first
+	if err := json.Unmarshal(data, &cached); err == nil && cached.Registry != nil {
+		if time.Since(cached.SavedAt) > 24*time.Hour {
+			return nil, fmt.Errorf("cache expired (older than 24h)")
+		}
+		c.log.Info("loaded registry from cache (offline mode)")
+		return cached.Registry, nil
 	}
 
-	c.log.Info("loaded registry from cache (offline mode)")
-	return &reg, nil
+	// Fallback for old format (or invalid format). Re-fetch.
+	return nil, fmt.Errorf("invalid or outdated cache format")
 }

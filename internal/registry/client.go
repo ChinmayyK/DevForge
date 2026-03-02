@@ -32,18 +32,24 @@ func NewClient(registryURL string, log *logger.Logger) *Client {
 	}
 }
 
-// Fetch retrieves the template registry. It first tries the remote
-// endpoint and falls back to the local cache if the network request
-// fails.
-func (c *Client) Fetch() (*Registry, error) {
+// Fetch retrieves the template registry. It checks the local cache first
+// unless forceRefresh is true or the cache is expired/missing.
+func (c *Client) Fetch(forceRefresh bool) (*Registry, error) {
+	if !forceRefresh {
+		reg, err := c.cache.Load()
+		if err == nil {
+			return reg, nil
+		}
+		c.log.Debug(fmt.Sprintf("cache miss or expired: %v", err))
+	}
+
 	c.log.Debug("fetching template registry", map[string]interface{}{
 		"url": c.registryURL,
 	})
 
 	reg, err := c.fetchRemote()
 	if err != nil {
-		c.log.Warn(fmt.Sprintf("failed to fetch remote registry: %v; trying cache", err))
-		return c.cache.Load()
+		return nil, fmt.Errorf("failed to fetch remote registry: %w", err)
 	}
 
 	// Cache the successful response for offline use.

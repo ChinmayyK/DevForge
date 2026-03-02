@@ -1,30 +1,33 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/spf13/cobra"
 
 	"github.com/chinmay/devforge/internal/config"
 	"github.com/chinmay/devforge/internal/envgen"
+	"github.com/chinmay/devforge/internal/errors"
 	"github.com/chinmay/devforge/internal/executor"
 	"github.com/chinmay/devforge/internal/installer"
 	"github.com/chinmay/devforge/internal/logger"
 	"github.com/chinmay/devforge/internal/osdetect"
-	"github.com/chinmay/devforge/internal/remote"
 	"github.com/chinmay/devforge/internal/rollback"
 	"github.com/chinmay/devforge/internal/security"
 	"github.com/chinmay/devforge/internal/semver"
 	"github.com/chinmay/devforge/internal/template"
+	"github.com/chinmay/devforge/internal/ux"
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init <project-name>",
 	Short: "Scaffold a new project",
 	Long: `Initialize a new project by:
-  1. Detecting your OS
+  1. Detecting your OS and package manager
   2. Loading configuration
   3. Installing required dependencies (with version pinning)
   4. Cloning the starter template
@@ -38,18 +41,32 @@ If any step fails, previously completed steps are automatically rolled back.`,
 func init() {
 	rootCmd.AddCommand(initCmd)
 }
-
 func runInit(cmd *cobra.Command, args []string) error {
 	projectName := args[0]
 
 	// Validate project name for safety.
 	if err := security.ValidateName(projectName); err != nil {
-		return fmt.Errorf("invalid project name: %w", err)
+		ux.Error(errors.New(errors.CodeInvalidConfig, "invalid project name", "use alphanumeric characters and dashes only"))
+		return nil
 	}
 
-	// ── Remote execution path ──────────────────────────────────────
-	if remoteHost != "" {
-		return runRemoteInit(projectName)
+	destDir, err := filepath.Abs(projectName)
+	if err != nil {
+		ux.Error(fmt.Errorf("failed to resolve project path: %v", err))
+		return nil
+	}
+
+	// ── Safety Check: Prevent accidental overwrite ─────────────────
+	if _, err := os.Stat(destDir); err == nil {
+		if !force {
+			ux.Error(errors.New(
+				errors.CodePathExists,
+				fmt.Sprintf("directory %q already exists", projectName),
+				"use the --force flag to overwrite",
+			))
+			return nil
+		}
+		ux.Warning("Directory %q exists. Proceeding due to --force flag.", projectName)
 	}
 
 	// ── Step 1: Detect OS ──────────────────────────────────────────
@@ -87,57 +104,83 @@ func runInit(cmd *cobra.Command, args []string) error {
 	exec := executor.New(log, dryRun)
 	inst, err := installer.NewFromOS(log, exec, osInfo)
 	if err != nil {
-		return fmt.Errorf("installer initialization failed: %w", err)
+		ux.Error(fmt.Errorf("installer initialization failed: %v", err))
+		return nil
 	}
 
+	ux.Step("Installing dependencies")
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(cfg.Dependencies))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Limit concurrency to 3 simultaneous installs
+	sem := make(chan struct{}, 3)
+
 	for _, dep := range cfg.Dependencies {
-		installed, checkErr := inst.IsInstalled(dep.Name)
-		if checkErr != nil {
-			log.Warn(fmt.Sprintf("could not check if %q is installed: %v", dep.Name, checkErr))
-		}
+		wg.Add(1)
+		go func(dep config.Dependency) {
+			defer wg.Done()
 
-		if installed {
-			currentVersion, _ := inst.GetVersion(dep.Name)
-			fmt.Printf("✓ %s already installed (v%s)", dep.Name, currentVersion)
+			// Check context cancellation
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}: // Acquire semaphore
+				defer func() { <-sem }() // Release semaphore
+			}
 
-			// Version mismatch check.
-			if dep.Version != "" && dep.Version != "latest" && currentVersion != "" {
-				desired, parseErr := semver.Parse(dep.Version)
-				current, curParseErr := semver.Parse(currentVersion)
-				if parseErr == nil && curParseErr == nil && !desired.IsZero() {
-					if !desired.MajorMatches(current) {
-						fmt.Printf(" ⚠ wanted v%s", dep.Version)
-						log.Warn(fmt.Sprintf("version mismatch for %q: installed=%s, wanted=%s", dep.Name, currentVersion, dep.Version))
+			installed, checkErr := inst.IsInstalled(dep.Name)
+			if checkErr != nil {
+				log.Warn(fmt.Sprintf("could not check if %q is installed: %v", dep.Name, checkErr))
+			}
+
+			if installed {
+				currentVersion, _ := inst.GetVersion(dep.Name)
+				ux.Success("%s already installed (v%s)", dep.Name, currentVersion)
+
+				// Version mismatch check
+				if dep.Version != "" && dep.Version != "latest" && currentVersion != "" {
+					desired, parseErr := semver.Parse(dep.Version)
+					current, curParseErr := semver.Parse(currentVersion)
+					if parseErr == nil && curParseErr == nil && !desired.IsZero() {
+						if !desired.MajorMatches(current) {
+							ux.Warning("version mismatch for %q: installed=%s, wanted=%s", dep.Name, currentVersion, dep.Version)
+						}
 					}
 				}
+				return
 			}
-			fmt.Println()
-			log.Info(fmt.Sprintf("dependency %q already installed", dep.Name))
-			continue
-		}
 
-		versionLabel := dep.Version
-		if versionLabel == "" || versionLabel == "latest" {
-			versionLabel = "latest"
-		}
-		fmt.Printf("⟳ Installing %s (v%s)...\n", dep.Name, versionLabel)
-		if err := inst.Install(dep.Name, dep.Version); err != nil {
-			log.Error(fmt.Sprintf("failed to install %q", dep.Name))
-			rbErr := rb.Execute()
-			if rbErr != nil {
-				log.Error(fmt.Sprintf("rollback errors: %v", rbErr))
+			versionLabel := dep.Version
+			if versionLabel == "" || versionLabel == "latest" {
+				versionLabel = "latest"
 			}
-			return fmt.Errorf("dependency installation failed for %q: %w", dep.Name, err)
-		}
-		fmt.Printf("✓ %s installed\n", dep.Name)
+			ux.Step("Installing %s (v%s)", dep.Name, versionLabel)
+
+			if err := inst.Install(dep.Name, dep.Version); err != nil {
+				errCh <- errors.New(
+					errors.CodeExecutionFailed,
+					fmt.Sprintf("failed to install %q", dep.Name),
+					"check your network connection or package manager logs",
+				)
+				cancel() // Fail fast
+				return
+			}
+			ux.Success("%s installed", dep.Name)
+		}(dep)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	if err := <-errCh; err != nil {
+		ux.Error(err)
+		rb.Execute()
+		return nil
 	}
 
 	// ── Step 6: Clone template ─────────────────────────────────────
-	destDir, err := filepath.Abs(projectName)
-	if err != nil {
-		return fmt.Errorf("failed to resolve project path: %w", err)
-	}
-
 	cloner := template.NewCloner(log, rb, dryRun)
 	if err := cloner.Clone(cfg.Template, destDir); err != nil {
 		log.Error(fmt.Sprintf("template cloning failed: %v", err))
@@ -163,63 +206,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println("✓ Environment configuration complete")
 	}
 
-	// ── Step 8: Print success summary ──────────────────────────────
-	printSummary(projectName, destDir, cfg, dryRun)
-	log.Info("DevForge init completed successfully")
-
-	return nil
-}
-
-// runRemoteInit delegates the init operation to a remote DevForge agent.
-func runRemoteInit(projectName string) error {
-	log, err := logger.New(verbose, jsonLogs)
-	if err != nil {
-		return fmt.Errorf("logger initialization failed: %w", err)
-	}
-	defer log.Close()
-
-	token := os.Getenv("DEVFORGE_TOKEN")
-	if token == "" {
-		return fmt.Errorf("DEVFORGE_TOKEN environment variable is required for remote execution")
-	}
-
-	client := remote.NewClient(remoteHost, token, log, false)
-
-	req := remote.Request{
-		Command:     "init",
-		ProjectName: projectName,
-		Version:     Version,
-		DryRun:      dryRun,
-	}
-
-	fmt.Printf("⟳ Sending remote init request to %s...\n", remoteHost)
-	resp, err := client.Execute(req)
-	if err != nil {
-		return fmt.Errorf("remote execution failed: %w", err)
-	}
-
-	// Display streaming logs.
-	fmt.Println()
-	fmt.Println("  Remote Execution Logs")
-	fmt.Println("  ═════════════════════")
-	client.PrintLogs(resp)
-
-	fmt.Println()
-	if resp.Success {
-		fmt.Printf("  ✅ Remote init completed (request: %s, duration: %s)\n", resp.RequestID, resp.Duration)
-	} else {
-		fmt.Printf("  ❌ Remote init failed: %s\n", resp.Error)
-	}
-	fmt.Println()
-
-	if !resp.Success {
-		return fmt.Errorf("remote execution failed: %s", resp.Error)
-	}
-	return nil
-}
-
-// printSummary displays a clear success message with next steps.
-func printSummary(name, dir string, cfg *config.Config, dryRun bool) {
+	// ── Done ───────────────────────────────────────────────────────
 	fmt.Println()
 	if dryRun {
 		fmt.Println("═══════════════════════════════════════════")
@@ -227,19 +214,16 @@ func printSummary(name, dir string, cfg *config.Config, dryRun bool) {
 		fmt.Println("═══════════════════════════════════════════")
 	} else {
 		fmt.Println("═══════════════════════════════════════════")
-		fmt.Printf("  🚀 Project %q created successfully!\n", name)
+		fmt.Printf("  🚀 Project %q created successfully!\n", projectName)
 		fmt.Println("═══════════════════════════════════════════")
 	}
 	fmt.Println()
 	fmt.Println("  Next steps:")
-	fmt.Printf("    cd %s\n", dir)
-	if cfg.Linting {
-		fmt.Println("    # Linting is enabled")
-	}
-	if cfg.GitHooks {
-		fmt.Println("    # Git hooks are configured")
-	}
+	fmt.Printf("    cd %s\n", destDir)
 	fmt.Println()
 	fmt.Println("  Run 'devforge doctor' to verify system readiness.")
 	fmt.Println()
+
+	log.Info("DevForge init completed successfully")
+	return nil
 }
