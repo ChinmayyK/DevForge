@@ -262,3 +262,4 @@ func expectedAssetName() string {
 	}
 	return fmt.Sprintf("devforge-%s-%s%s", goos, arch, ext)
 }
+
