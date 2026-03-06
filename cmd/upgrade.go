@@ -129,3 +129,4 @@ func upgradeDeps(deps []config.Dependency, inst installer.Installer, log *logger
 	wg.Wait()
 	return results
 }
+
