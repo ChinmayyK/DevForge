@@ -183,4 +183,3 @@ func parseOSRelease() (map[string]string, error) {
 
 	return result, nil
 }
-
