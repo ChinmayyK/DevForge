@@ -84,3 +84,4 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	rootCmd.PersistentFlags().BoolVar(&force, "force", false, "force overwrite of existing directories/files")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output (also honoured via NO_COLOR env var)")
 }
+
