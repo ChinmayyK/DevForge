@@ -142,3 +142,4 @@ func (h *fileHook) Fire(entry *logrus.Entry) error {
 	_, err = h.file.Write(line)
 	return err
 }
+
