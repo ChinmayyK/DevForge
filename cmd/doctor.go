@@ -279,3 +279,4 @@ func trimVersionPrefixes(name, raw string) string {
 	}
 	return strings.Trim(raw, "\"' \t")
 }
+
