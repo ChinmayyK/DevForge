@@ -208,3 +208,4 @@ func (g *Generator) writeEnvFile(path string, keys []string, values map[string]s
 	}
 	return w.Flush()
 }
+
