@@ -102,4 +102,3 @@ func TestVersion_String(t *testing.T) {
 		t.Errorf("String() = %q, want %q", s, "1.0.0-beta.1")
 	}
 }
-
