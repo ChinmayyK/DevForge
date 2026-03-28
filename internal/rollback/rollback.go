@@ -88,3 +88,4 @@ func (m *Manager) HasActions() bool {
 	defer m.mu.Unlock()
 	return len(m.actions) > 0
 }
+
