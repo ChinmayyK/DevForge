@@ -82,3 +82,4 @@ func (b *BrewInstaller) formulaName(name, version string) string {
 	// Fallback: use version as-is (handles non-semver strings)
 	return fmt.Sprintf("%s@%s", name, version)
 }
+
